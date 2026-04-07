@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloud-cost-optimizer"
+version = "0.1.0"
+description = "Cloud Cost Optimizer Environment for OpenEnv"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "openai",
+    "requests",
+    "openenv-core>=0.2.0",
+    "scalar-fastapi" 
+]
+
+[project.scripts]
+server = "server.app:main"

@@ -1,0 +1,10 @@
+spec_version: "1.0"
+env_name: "cloud-cost-optimizer"
+description: "An AI agent must balance cloud server provisioning against incoming web traffic to minimize costs and prevent dropped requests."
+tasks:
+  - id: "easy"
+    description: "Constant traffic. Maintain optimal server count."
+  - id: "medium"
+    description: "Traffic spikes. Scale up and down efficiently."
+  - id: "hard"
+    description: "Erratic traffic requiring rapid scaling to prevent server crashes."
