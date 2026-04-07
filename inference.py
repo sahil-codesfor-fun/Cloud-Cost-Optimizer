@@ -6,20 +6,16 @@ import json
 import re
 from openai import OpenAI
 
-API_BASE_URL_DEFAULT = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
-HF_TOKEN = os.getenv("HF_TOKEN")
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
 
 if "API_BASE_URL" not in os.environ:
-    os.environ["API_BASE_URL"] = API_BASE_URL_DEFAULT
-
+    os.environ["API_BASE_URL"] = "https://integrate.api.nvidia.com/v1"
 if "API_KEY" not in os.environ:
-    os.environ["API_KEY"] = HF_TOKEN if HF_TOKEN else "dummy_key"
+    os.environ["API_KEY"] = os.getenv("HF_TOKEN", "dummy_key")
 
-# THE EXACT STRING THE JUDGE'S ROBOT DEMANDS:
 client = OpenAI(base_url=os.environ["API_BASE_URL"], api_key=os.environ["API_KEY"])
-
+BENCHMARK = "cloud-cost-optimizer"
 
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
@@ -33,50 +29,38 @@ def log_end(task: str, success: bool, steps: int, score: float, rewards: list) -
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] task={task} success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
-
 def get_action(obs):
     traffic = obs['current_traffic']
     active = obs['active_instances']
     
     prompt = f"""
-    You are a strict Cloud DevOps AI.
-    Traffic: {traffic}
-    Active Servers: {active}
-    RULES: Keep Active Servers roughly equal to (Traffic / 75).
-    Output ONLY a valid JSON object with "action_type" ("SCALE_UP", "SCALE_DOWN", "NO_OP") and "instance_count".
+    You are a Cloud DevOps AI. Traffic: {traffic}, Active Servers: {active}.
+    Output ONLY valid JSON with "action_type" ("SCALE_UP", "SCALE_DOWN", "NO_OP") and "instance_count".
     """
     
-    last_error = "null"
-    
-    for attempt in range(5):
-        try:
-            completion = client.chat.completions.create(
-                model=MODEL_NAME, 
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0
-            )
-            raw_text = completion.choices[0].message.content
-            match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
-            if match:
-                return json.loads(match.group(0)), None
-        except Exception as e:
-            time.sleep(2)
-            last_error = str(e)[:50]
-            
-    return {"action_type": "NO_OP", "instance_count": 0}, last_error
-
+    completion = client.chat.completions.create(
+        model=MODEL_NAME, 
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0
+    )
+    raw_text = completion.choices[0].message.content
+    match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
+    if match:
+        return json.loads(match.group(0)), None
+        
+    return {"action_type": "NO_OP", "instance_count": 0}, "Failed to parse JSON"
 
 def run_agent(task_id: str):
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
     
     server_awake = False
-    for _ in range(20): 
+    for _ in range(15): 
         try:
             requests.post(f"{API_URL}/reset", json={"task_id": task_id}, timeout=5)
             server_awake = True
             break
         except Exception:
-            time.sleep(3) 
+            time.sleep(2) 
             
     if not server_awake:
         log_end(task=task_id, success=False, steps=0, score=0.0, rewards=[])
@@ -116,6 +100,5 @@ def run_agent(task_id: str):
     log_end(task=task_id, success=success, steps=step_count, score=score, rewards=rewards_history)
 
 if __name__ == "__main__":
-    BENCHMARK = "cloud-cost-optimizer"
     for task in ["easy", "medium", "hard"]:
         run_agent(task)
