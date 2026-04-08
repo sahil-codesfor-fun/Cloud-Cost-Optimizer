@@ -9,7 +9,7 @@ app = FastAPI(title="CCO")
 env = CloudOptimizerEnv()
 
 class ResetRequest(BaseModel):
-    task_id: str
+    task_id: str = "easy"
 
 @app.get("/", include_in_schema=False)
 def redirect_to_ui():
