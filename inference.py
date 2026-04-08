@@ -7,11 +7,12 @@ import re
 from openai import OpenAI
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
-MODEL_NAME = os.getenv("MODEL_NAME")
-API_BASE_URL = os.getenv("API_BASE_URL")
-API_KEY = os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+AUTH_TOKEN = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+
+client = OpenAI(base_url=API_BASE_URL, api_key=AUTH_TOKEN)
 
 BENCHMARK = "cloud-cost-optimizer"
 
@@ -31,10 +32,7 @@ def get_action(obs):
     traffic = obs['current_traffic']
     active = obs['active_instances']
     
-    prompt = f"""
-    You are a strict Cloud DevOps AI. Traffic: {traffic}, Active Servers: {active}.
-    Output ONLY a valid JSON object with "action_type" ("SCALE_UP", "SCALE_DOWN", "NO_OP") and "instance_count".
-    """
+    prompt = f"Traffic: {traffic}, Active: {active}. Output JSON: {{'action_type': '...', 'instance_count': ...}}"
     
     completion = client.chat.completions.create(
         model=MODEL_NAME, 
@@ -45,8 +43,8 @@ def get_action(obs):
     match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
     if match:
         return json.loads(match.group(0)), None
-            
-    return {"action_type": "NO_OP", "instance_count": 0}, "Failed to parse JSON"
+    
+    return {"action_type": "NO_OP", "instance_count": 0}, "No JSON found"
 
 def run_agent(task_id: str):
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
