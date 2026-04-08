@@ -10,9 +10,9 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
 
-AUTH_TOKEN = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
+JUDGE_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=AUTH_TOKEN)
+client = OpenAI(base_url=API_BASE_URL, api_key=JUDGE_KEY)
 
 BENCHMARK = "cloud-cost-optimizer"
 
@@ -32,25 +32,26 @@ def get_action(obs):
     traffic = obs['current_traffic']
     active = obs['active_instances']
     
-    prompt = f"Traffic: {traffic}, Active: {active}. Output JSON: {{'action_type': '...', 'instance_count': ...}}"
+    prompt = f"Traffic: {traffic}, Active: {active}. Output ONLY JSON: {{'action_type': '...', 'instance_count': ...}}"
     
     completion = client.chat.completions.create(
         model=MODEL_NAME, 
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0
     )
+    
     raw_text = completion.choices[0].message.content
     match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
     if match:
         return json.loads(match.group(0)), None
     
-    return {"action_type": "NO_OP", "instance_count": 0}, "No JSON found"
+    return {"action_type": "NO_OP", "instance_count": 0}, "JSON_PARSE_ERROR"
 
 def run_agent(task_id: str):
     log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
     
     server_awake = False
-    for _ in range(15): 
+    for _ in range(20): 
         try:
             requests.post(f"{API_URL}/reset", json={"task_id": task_id}, timeout=5)
             server_awake = True
@@ -82,8 +83,7 @@ def run_agent(task_id: str):
             log_step(step=step_count, action=action_str, reward=reward, done=done, error=error)
             
         except Exception as e:
-            error_msg = str(e)[:50]
-            log_step(step=step_count, action="null", reward=0.0, done=True, error=error_msg)
+            log_step(step=step_count, action="null", reward=0.0, done=True, error=str(e)[:50])
             break
             
     try:
