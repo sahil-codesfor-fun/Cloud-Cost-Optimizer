@@ -11,7 +11,6 @@ env = CloudOptimizerEnv()
 class ResetRequest(BaseModel):
     task_id: str
 
-
 @app.get("/", include_in_schema=False)
 def redirect_to_ui():
     return RedirectResponse(url="/scalar")
@@ -27,6 +26,12 @@ def get_tasks():
 def reset(req: ResetRequest = None): 
     if req is None:
         req = ResetRequest(task_id="easy")
+    try:
+        env.reset(req.task_id)
+    except Exception:
+        env.reset()
+        
+    return {"message": "Reset successful"}
 
 @app.post("/step")
 def step_environment(action: Action):
