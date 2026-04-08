@@ -6,13 +6,13 @@ import json
 import re
 from openai import OpenAI
 
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://integrate.api.nvidia.com/v1"
+MODEL_NAME = os.getenv("MODEL_NAME") or "meta/llama-3.1-8b-instruct"
+
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
 
-JUDGE_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
-
-client = OpenAI(base_url=API_BASE_URL, api_key=JUDGE_KEY)
+client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
 BENCHMARK = "cloud-cost-optimizer"
 
@@ -24,9 +24,10 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str) -> N
     done_val = str(done).lower()
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
-def log_end(task: str, success: bool, steps: int, score: float, rewards: list) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: list) -> None:
+    # 🚨 CRITICAL FIX: "task=" has been removed from the [END] line to match new docs!
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] task={task} success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 def get_action(obs):
     traffic = obs['current_traffic']
@@ -34,17 +35,19 @@ def get_action(obs):
     
     prompt = f"Traffic: {traffic}, Active: {active}. Output ONLY JSON: {{'action_type': '...', 'instance_count': ...}}"
     
-    completion = client.chat.completions.create(
-        model=MODEL_NAME, 
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.0
-    )
-    
-    raw_text = completion.choices[0].message.content
-    match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
-    if match:
-        return json.loads(match.group(0)), None
-    
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME, 
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        raw_text = completion.choices[0].message.content
+        match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0)), None
+    except Exception as e:
+        return {"action_type": "NO_OP", "instance_count": 0}, str(e)[:50]
+        
     return {"action_type": "NO_OP", "instance_count": 0}, "JSON_PARSE_ERROR"
 
 def run_agent(task_id: str):
@@ -60,7 +63,7 @@ def run_agent(task_id: str):
             time.sleep(2) 
             
     if not server_awake:
-        log_end(task=task_id, success=False, steps=0, score=0.0, rewards=[])
+        log_end(success=False, steps=0, score=0.0, rewards=[])
         return
         
     done = False
@@ -93,7 +96,7 @@ def run_agent(task_id: str):
         score = 0.0
         success = False
         
-    log_end(task=task_id, success=success, steps=step_count, score=score, rewards=rewards_history)
+    log_end(success=success, steps=step_count, score=score, rewards=rewards_history)
 
 if __name__ == "__main__":
     for task in ["easy", "medium", "hard"]:
