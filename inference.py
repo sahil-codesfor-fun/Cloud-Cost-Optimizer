@@ -6,13 +6,15 @@ import json
 import re
 from openai import OpenAI
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 if "API_BASE_URL" not in os.environ:
-    os.environ["API_BASE_URL"] = "https://integrate.api.nvidia.com/v1"
+    os.environ["API_BASE_URL"] = API_BASE_URL
 if "API_KEY" not in os.environ:
-    os.environ["API_KEY"] = os.getenv("HF_TOKEN", "dummy_key")
+    os.environ["API_KEY"] = HF_TOKEN if HF_TOKEN else "dummy"
 
 client = OpenAI(base_url=os.environ["API_BASE_URL"], api_key=os.environ["API_KEY"])
 BENCHMARK = "cloud-cost-optimizer"
