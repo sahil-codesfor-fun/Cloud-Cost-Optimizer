@@ -7,8 +7,8 @@ import re
 from openai import OpenAI
 
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-MODEL_NAME = os.getenv("MODEL_NAME") or "meta/llama-3.1-8b-instruct"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://integrate.api.nvidia.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta/llama-3.1-8b-instruct")
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
@@ -25,7 +25,6 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str) -> N
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 def log_end(success: bool, steps: int, score: float, rewards: list) -> None:
-    # 🚨 CRITICAL FIX: "task=" has been removed from the [END] line to match new docs!
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
@@ -35,18 +34,16 @@ def get_action(obs):
     
     prompt = f"Traffic: {traffic}, Active: {active}. Output ONLY JSON: {{'action_type': '...', 'instance_count': ...}}"
     
-    try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME, 
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0
-        )
-        raw_text = completion.choices[0].message.content
-        match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0)), None
-    except Exception as e:
-        return {"action_type": "NO_OP", "instance_count": 0}, str(e)[:50]
+    completion = client.chat.completions.create(
+        model=MODEL_NAME, 
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0
+    )
+    
+    raw_text = completion.choices[0].message.content
+    match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
+    if match:
+        return json.loads(match.group(0)), None
         
     return {"action_type": "NO_OP", "instance_count": 0}, "JSON_PARSE_ERROR"
 
